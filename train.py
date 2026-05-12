@@ -68,7 +68,7 @@ class LabelSmoothingLoss(nn.Module):
         log_probs = torch.log_softmax(logits, dim=-1)  
 
         with torch.no_grad():
-            # Create smoothed target distribution
+            # Creating smoothed target distribution
             true_dist = torch.zeros_like(log_probs)  
             true_dist.fill_(self.smoothing / (self.vocab_size - 2))  # distribute smoothing
             true_dist.scatter_(1, target.unsqueeze(1), 1.0 - self.smoothing)  # setting correct class
@@ -352,6 +352,27 @@ def run_training_experiment() -> None:
                wandb.log({'test_bleu': bleu})
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    wandb.init(
+        project="DA6401-Assignment3",
+        name="noam_scheduler",
+        config={
+            "experiment": "Noam Scheduler",
+            # "encoding_type": "learned",
+            # "attention_scaling": True,
+            "label_smoothing": 0.1,
+            "d_model": 512,
+            "num_heads": 8,
+            "layers": 6,
+            "d_ff": 2048,
+            "dropout": 0.1,
+            "optimizer": "Adam",
+            "scheduler": "Noam",
+            "warmup_steps": 4000,
+            "batch_size": 128,
+            "epochs": 10
+        }
+)
     #  implement full experiment
     train_dataset = Multi30kDataset(split='train')
     val_dataset = Multi30kDataset(split='validation', src_vocab=train_dataset.src_vocab, tgt_vocab=train_dataset.tgt_vocab)
@@ -380,6 +401,7 @@ def run_training_experiment() -> None:
                                  pad_idx=1,
                                  smoothing=0.1)
     num_epochs = 10
+    global_step = 0
 
     for epoch in range(num_epochs) :
         train_loss = run_epoch(train_loader,
@@ -390,6 +412,11 @@ def run_training_experiment() -> None:
                                epoch,
                                is_train = True,
                                device = device)
+
+        wandb.log({
+            "step": global_step,
+            "learning_rate": optimizer.param_groups[0]["lr"]
+        })
         val_loss = run_epoch(val_loader,
                              model,
                              loss_fn,
@@ -398,16 +425,40 @@ def run_training_experiment() -> None:
                              epoch,
                              is_train = False,
                              device = device)
-        print(f"Epoch {epoch+1}/{num_epochs} | "
-              f"Train Loss: {train_loss:.4f} | "
-              f"Va Loss: {val_loss:.4f}")
+
+        val_bleu = evaluate_bleu(
+            model,
+            val_loader,
+            train_dataset.tgt_vocab,
+            device=device
+        )
+
+        print(
+            f"Epoch {epoch+1}/{num_epochs} | "
+            f"Train Loss: {train_loss:.4f} | "
+            f"Val Loss: {val_loss:.4f} | "
+            f"Val BLEU: {val_bleu:.2f}"
+        )
+
+        wandb.log({
+            "epoch": epoch + 1,
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "val_bleu": val_bleu
+        })
         save_checkpoint(model, optimizer, scheduler, epoch, path = "checkpoint.pt")
         import pickle
         with open("vocab.pkl", "wb") as f :
             pickle.dump((train_dataset.src_vocab, train_dataset.tgt_vocab), f)
+        global_step += 1
 
     bleu = evaluate_bleu(model, test_loader, train_dataset.tgt_vocab, device = device)
     print(f"Test BLEU Score: {bleu:.2f}")
+    wandb.log({
+        "test_bleu": bleu
+    })
+
+    wandb.finish()
 
 
 if __name__ == "__main__":
