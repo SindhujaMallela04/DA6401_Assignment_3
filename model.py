@@ -65,8 +65,8 @@ def scaled_dot_product_attention(
     if mask is not None:
         scores = scores.masked_fill(mask, float('-inf'))
 
-    attn_w = F.softmax(scores, dim=-1)  # (..., seq_q, seq_k)
-    output = torch.matmul(attn_w, V)     # (..., seq_q, d_v)
+    attn_w = F.softmax(scores, dim=-1) 
+    output = torch.matmul(attn_w, V)
 
     return output, attn_w   
 
@@ -114,7 +114,7 @@ def make_tgt_mask(
     batch_size, tgt_len = tgt.shape
     pad_mask = (tgt == pad_idx).unsqueeze(1).unsqueeze(2)
     causal_mask = torch.triu(torch.ones((tgt_len, tgt_len), device=tgt.device), diagonal=1).bool()
-    return pad_mask | causal_mask  # Combine masks with logical OR
+    return pad_mask | causal_mask 
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -180,7 +180,7 @@ class MultiHeadAttention(nn.Module):
         K = self.w_k(key) 
         V = self.w_v(value)
 
-        # 2) Reshape and transpose to get separate heads
+        # 2) Reshaping and transposing to get separate heads
         #    New shape: [batch, num_heads, seq_len, d_k]
         Q = Q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
         K = K.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
@@ -190,7 +190,7 @@ class MultiHeadAttention(nn.Module):
         #    attn_output shape: [batch, num_heads, seq_q, d_k]
         attn_output, _ = scaled_dot_product_attention(Q, K, V, mask)
 
-        # 4) Concatenate heads and apply final linear projection
+        # 4) Concatenating heads and applying final linear projection
         #    attn_output shape after concat: [batch, seq_q, d_model]
         attn_output = self.dropout(attn_output)
         
@@ -216,7 +216,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        # Pre-compute positional encodings
+        # Pre-computing positional encodings
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
@@ -312,12 +312,12 @@ class EncoderLayer(nn.Module):
 
         """
         # Self-Attention sub-layer
-        attn_output = self.self_attn(x, x, x, src_mask)  # [batch, src_len, d_model]
-        x = self.norm1(x + self.dropout(attn_output))    # Add & Norm
+        attn_output = self.self_attn(x, x, x, src_mask)
+        x = self.norm1(x + self.dropout(attn_output)) 
 
         # Feed-Forward sub-layer
-        ff_output = self.feed_forward(x)                 # [batch, src_len, d_model]
-        x = self.norm2(x + self.dropout(ff_output))     # Add & Norm
+        ff_output = self.feed_forward(x) 
+        x = self.norm2(x + self.dropout(ff_output)) 
 
         return x
 
@@ -370,11 +370,11 @@ class DecoderLayer(nn.Module):
         """
         # Masked Self-Attention sub-layer
         self_attn_output = self.self_attn(x, x, x, tgt_mask)
-        x = self.norm1(x + self.dropout(self_attn_output))   # Add & Norm
+        x = self.norm1(x + self.dropout(self_attn_output))
 
         # Cross-Attention sub-layer
         cross_attn_output = self.cross_attn(x, memory, memory, src_mask) 
-        x = self.norm2(x + self.dropout(cross_attn_output))              # Add & Norm
+        x = self.norm2(x + self.dropout(cross_attn_output))
 
         # Feed-Forward sub-layer
         ff_output = self.feed_forward(x)
